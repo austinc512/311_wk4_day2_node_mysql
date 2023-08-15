@@ -29,7 +29,6 @@ const getAllUsers = (req, res) => {
 const getUserById = (req, res) => {
   // SELECT USERS WHERE ID = <REQ PARAMS ID>
   // /users/:id
-  console.log(req.params.id);
   // check for valid ID
   // if there's not a valid ID, send status of 400
   let id = req.params.id;
@@ -51,7 +50,6 @@ FROM
 WHERE
   u.id = ?
   `;
-  // WHAT GOES IN THE BRACKETS
   const param = [id];
   // OLD SYNTAX:
   // sql = mysql.format(sql, param);
@@ -78,7 +76,7 @@ WHERE
   });
 };
 
-const createUser = (req, res) => {
+const createUserCallbackHell = (req, res) => {
   // we're gonna insert all three tables
   // INSERT INTO USERS FIRST AND LAST NAME
   // ^^creates id needed for next 2 queries.
@@ -103,12 +101,13 @@ const createUser = (req, res) => {
       res.sendStatus(500); // it's the server's fault
     } else {
       // if here, the first query executed.
+
       // postman check
       // res.json(rows);
+
       // SECOND QUERY
       // I need the ID of the record that we just inserted.
       const getId = rows.insertId;
-      console.log(getId);
       // res.json("lookin good");
       const { address, city, county, state, zip } = req.body;
 
@@ -143,9 +142,10 @@ const createUser = (req, res) => {
           db.query(sql3, params3, (err, rows) => {
             if (err) {
               console.log(`insert into usersContacts failed, `, err);
+              res.sendStatus(500);
             } else {
               // if here, query worked
-              // postman check0
+              // postman check
               res.json(rows);
             }
           });
@@ -188,27 +188,92 @@ const createUser = (req, res) => {
   */
 };
 
+const createUser = async (req, res) => {
+  // sync uses promises (async, await)
+  // querySync()
+  const { first_name, last_name } = req.body;
+  let params = [first_name, last_name];
+  let sql = "INSERT INTO users (first_name, last_name) VALUES (?, ?)";
+  let results;
+  try {
+    results = await db.querySync(sql, params);
+    // postman check
+    // res.json(results);
+  } catch (err) {
+    console.log(`Insert into users failed, ${err}`);
+    res.sendStatus(500);
+    return; // if query doesn't work, just stop
+  }
+
+  // SECOND QUERY
+  const getId = results.insertId;
+  const { address, city, county, state, zip } = req.body;
+  params = [getId, address, city, county, state, zip];
+  sql =
+    "INSERT INTO usersAddress (user_id, address, city, county, state, zip) VALUES (?, ?, ?, ?, ?, ?)";
+  //
+  try {
+    results = await db.querySync(sql, params);
+    // postman check
+    // res.json(results);
+  } catch (err) {
+    console.log(`Insert into usersAddress failed, ${err}`);
+    res.sendStatus(500);
+    return; // if query doesn't work, just stop
+  }
+
+  // THIRD QUERY
+  const { phone1, phone2, email } = req.body;
+  sql = `insert into usersContact (user_id, phone1, phone2, email) VALUES (?, ?, ?, ?)`;
+  params = [getId, phone1, phone2, email];
+
+  try {
+    results = await db.querySync(sql, params);
+    console.log(`Insert into usersContact SUCCEEDED!`);
+    res.json(results);
+  } catch (err) {
+    console.log(`Insert into usersContact failed, ${err}`);
+    res.sendStatus(500);
+    return; // if query doesn't work, just stop
+  }
+};
+
 const updateUserById = (req, res) => {
   // UPDATE USERS AND SET FIRST AND LAST NAME WHERE ID = <REQ PARAMS ID>
-  let sql = "";
-  // WHAT GOES IN THE BRACKETS
-  sql = mysql.format(sql, []);
+  // only allowing first and last name
+  const id = req.params.id;
+  const { first_name, last_name } = req.body;
 
-  db.query(sql, (err, results) => {
-    if (err) return handleSQLError(res, err);
-    return res.status(204).json();
+  let params = [first_name, last_name, id];
+
+  let sql = `UPDATE users SET first_name = ?, last_name = ? WHERE id = ?`;
+
+  if (!id) {
+    res.status(400).json({ message: "That's not a valid id" });
+  }
+
+  db.query(sql, params, (err, results) => {
+    if (err) {
+      console.log("update users failed, ", err);
+      res.sendStatus(500);
+    } else {
+      res.json(results);
+    }
   });
 };
 
 const deleteUserByFirstName = (req, res) => {
   // DELETE FROM USERS WHERE FIRST NAME = <REQ PARAMS FIRST_NAME>
-  let sql = "";
-  // WHAT GOES IN THE BRACKETS
-  sql = mysql.format(sql, []);
-
-  db.query(sql, (err, results) => {
-    if (err) return handleSQLError(res, err);
-    return res.json({ message: `Deleted ${results.affectedRows} user(s)` });
+  let params = [req.params.first_name];
+  let sql = "delete from users where first_name = ?";
+  db.query(sql, params, (err, results) => {
+    if (err) {
+      console.log("error in delete statement", err);
+      res.sendStatus(500);
+    } else {
+      console.log(`Delete Successful`);
+      res.json({ message: `deleted ${results.affectedRows} user(s)` });
+    }
   });
 };
 
